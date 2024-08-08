@@ -1,0 +1,501 @@
+---
+title: "Plasmid antibiotic resistance gene occurrence diversity analysis"
+author: "Ilhan Cem Duru"
+date: "2024-08-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libs, include=FALSE}
+library(knitr)
+
+library(BiocParallel)
+
+library(ggplot2)
+library(RColorBrewer)
+library(dplyr)
+library(tidyr)
+library(tidylog)
+library(reshape2)
+library(purrr)
+library(magrittr)
+library(kableExtra)
+library(gridExtra)
+library(cowplot)
+library(patchwork)
+library(GGally)
+library(corrr)
+library(energy)
+library(MatrixCorrelation)
+library(qqplotr)
+library(ggridges)
+library(coin)
+library(dabestr)
+library(phyloseq)
+library(vegan)
+library(DESeq2)
+library(fido)
+library(microbiome)
+```
+
+# Load and prepare data for phyloseq
+## Create counts matrix
+```{r, warning=FALSE}
+# Load counts
+agr_genes_occurence <- read.csv("plasmid_agr_occurence.csv", header = TRUE,
+                       skipNul = TRUE, sep = "\t", as.is = TRUE)
+#agr_genes_occurence
+#str(agr_genes_occurence)
+#row.names(agr_genes_occurence)
+#class(agr_genes_occurence)
+colnames(agr_genes_occurence)
+#head(colnames(agr_genes_occurence))
+#dim(agr_genes_occurence)
+#agr_genes_occurence$phage
+
+## Put this in `matrix` class for `phyloseq`'s `otu table`, and create it:
+counts <- as.matrix(sapply(agr_genes_occurence, as.numeric))
+#head(counts)
+#head(colnames(counts))
+rownames(counts) <- agr_genes_occurence$ARG
+#head(counts)
+#head(colnames(counts))
+
+# delete/remove the newly created "phage" column:
+counts <- counts[ , -grep("ARG", colnames(counts))]
+#head(counts)
+#head(colnames(counts))
+#dim(counts)
+
+otu.table <- otu_table(counts, taxa_are_rows = TRUE)
+head(otu.table)
+head(colnames(otu.table))
+dim(otu.table)
+
+otu.table
+#get otu.table ARGs name from the index
+rownames(otu.table)
+
+```
+
+## Create dummy tax table for TAX
+```{r, warning=FALSE}
+taxmat = matrix(sample(letters, 87, replace = TRUE),
+                nrow = nrow(otu.table), ncol = 7)
+rownames(taxmat) <- rownames(otu.table)
+colnames(taxmat) <- c("Domain", "Phylum", "Class", "Order",
+                      "Family", "Genus", "Species")
+#taxmat
+TAX = tax_table(taxmat)
+```
+
+## Import the metadata:
+```{r, warning=FALSE}
+sampledata <- as.data.frame(read.csv
+                            (file = "pd_meta_with_ffq_and_scfa_only_oursamples_3variables_ordered.csv",
+                            header = TRUE, sep = ",", row.names = 1))
+#rownames(sampledata)
+#colnames(otu.table)
+identical(rownames(sampledata), colnames(otu.table))
+sampledata = sample_data(sampledata)
+```
+
+## Create physeq
+```{r, warning=FALSE}
+physeqfinal <- phyloseq(otu.table,TAX, sampledata)
+#physeqfinal
+#sample_data(physeqfinal)
+#summary(sample_data(physeqfinal))
+
+physeqfinal.2 <- subset_taxa(physeqfinal, taxa_sums(physeqfinal) >0)
+#head(sort(taxa_sums(physeqfinal.2), decreasing = FALSE))
+
+physeqfinal.2
+physeqfinal
+
+summary(sample_data(physeqfinal.2))
+```
+# Alpha Diversity for Group (C vs P)
+
+```{r, warning=FALSE}
+richness.table <- estimate_richness(physeqfinal.2, split = TRUE,
+                                    measures = c("Observed", "Chao1",
+                                    "ACE", "Shannon", "InvSimpson"))
+
+head(richness.table)
+
+richness.table$Group <- sample_data(physeqfinal.2)$Group
+```
+
+## Plot Alpha Diversity
+
+```{r, warning=FALSE}
+theme_set(theme_bw())
+
+grid.arrange(
+  ggplot(richness.table, aes(x = Group, y = Observed)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = Group, y = Chao1)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = Group, y = ACE)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = Group, y = Shannon)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = Group, y = InvSimpson)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  nrow = 1)
+```
+
+## Observed Richness Wilcoxon rank sum test (Group)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Observed ~ sample_data(physeqfinal.2)$Group,
+            conf.level = 0.95, conf.int = TRUE)
+```
+
+## CHAO1 Wilcoxon rank sum test (Group)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Chao1 ~ sample_data(physeqfinal.2)$Group,
+          conf.level = 0.95, conf.int = TRUE)
+```
+## ACE Wilcoxon rank sum test (Group)
+```{r, warning=FALSE}
+wilcox.test(richness.table$ACE ~ sample_data(physeqfinal.2)$Group,
+          conf.level = 0.95, conf.int = TRUE)
+```
+## InvSimpson Wilcoxon rank sum test (Group)
+```{r, warning=FALSE}
+richness.table$InvSimpson[which(is.infinite(richness.table$InvSimpson))] <- NA
+wilcox.test(richness.table$InvSimpson ~ sample_data(physeqfinal.2)$Group,
+            conf.level = 0.95, conf.int = TRUE)
+```
+## Shannon Wilcoxon rank sum test (Group)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Shannon ~ sample_data(physeqfinal.2)$Group,
+            conf.level = 0.95, conf.int = TRUE)
+```
+
+
+# Alpha Diversity for Gender (F vs M)
+```{r, warning=FALSE}
+richness.table$gender <- sample_data(physeqfinal.2)$gender
+```
+## Plot Alpha Diversity for Gender (F vs M)
+```{r, warning=FALSE}
+theme_set(theme_bw())
+
+grid.arrange(
+  ggplot(richness.table, aes(x = gender, y = Observed)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = gender, y = Chao1)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = gender, y = ACE)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = gender, y = Shannon)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  ggplot(richness.table, aes(x = gender, y = InvSimpson)) +
+    geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
+    stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
+  nrow = 1)
+```
+
+## Observed Richness Wilcoxon rank sum test (gender)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Observed ~ sample_data(physeqfinal.2)$gender,
+            conf.level = 0.95, conf.int = TRUE)
+```
+
+## CHAO1 Wilcoxon rank sum test (gender)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Chao1 ~ sample_data(physeqfinal.2)$gender,
+          conf.level = 0.95, conf.int = TRUE)
+```
+## ACE Wilcoxon rank sum test (gender)
+```{r, warning=FALSE}
+wilcox.test(richness.table$ACE ~ sample_data(physeqfinal.2)$gender,
+          conf.level = 0.95, conf.int = TRUE)
+```
+## InvSimpson Wilcoxon rank sum test (gender)
+```{r, warning=FALSE}
+wilcox.test(richness.table$InvSimpson ~ sample_data(physeqfinal.2)$gender,
+            conf.level = 0.95, conf.int = TRUE)
+```
+## Shannon Wilcoxon rank sum test (gender)
+```{r, warning=FALSE}
+wilcox.test(richness.table$Shannon ~ sample_data(physeqfinal.2)$gender,
+            conf.level = 0.95, conf.int = TRUE)
+```
+
+# Alpha Diversity for BMI (Continuous variable)
+```{r, warning=FALSE}
+richness.table$BMI <- sample_data(physeqfinal.2)$BMI
+```
+## Plot Alpha Diversity for BMI (Continuous variable)
+```{r, warning=FALSE}
+common_theme <- theme(
+  axis.text.x = element_text(angle = 45, hjust = 1),
+)
+
+grid.arrange(
+  ggplot(richness.table, aes(x = BMI, y = Observed)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "BMI", y = "Observed") +
+    scale_x_continuous(breaks = seq(20, 35, by = 5)) +  # Adjust range as needed
+    common_theme,
+  
+  ggplot(richness.table, aes(x = BMI, y = Chao1)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "BMI", y = "Chao1") +
+    scale_x_continuous(breaks = seq(20, 35, by = 5)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = BMI, y = ACE)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "BMI", y = "ACE") +
+    scale_x_continuous(breaks = seq(20, 35, by = 5)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = BMI, y = Shannon)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "BMI", y = "Shannon") +
+    scale_x_continuous(breaks = seq(20, 35, by = 5)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = BMI, y = InvSimpson)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "BMI", y = "InvSimpson") +
+    scale_x_continuous(breaks = seq(20, 35, by = 5)) +
+    common_theme,
+  
+  nrow = 1
+)
+```
+
+## Observed Richness Spearman rank sum test (BMI)
+```{r, warning=FALSE}
+cor.test(richness.table$Observed, sample_data(physeqfinal.2)$BMI, method = "spearman")
+```
+## CHAO1 Richness Spearman rank sum test (BMI)
+```{r, warning=FALSE}
+cor.test(richness.table$Chao1, sample_data(physeqfinal.2)$BMI, method = "spearman")
+```
+## ACE Richness Spearman rank sum test (BMI)
+```{r, warning=FALSE}
+cor.test(richness.table$ACE, sample_data(physeqfinal.2)$BMI, method = "spearman")
+```
+## InvSimpson Richness Spearman rank sum test (BMI)
+```{r, warning=FALSE}
+cor.test(richness.table$InvSimpson, sample_data(physeqfinal.2)$BMI, method = "spearman")
+```
+## Shannon Richness Spearman rank sum test (BMI)
+```{r, warning=FALSE}
+cor.test(richness.table$Shannon, sample_data(physeqfinal.2)$BMI, method = "spearman")
+```
+
+# Alpha Diversity for Age (Continuous variable)
+```{r, warning=FALSE}
+richness.table$age <- sample_data(physeqfinal.2)$age_at_stool_collection
+```
+## Plot Alpha Diversity for Age (Continuous variable)
+```{r, warning=FALSE}
+common_theme <- theme(
+  axis.text.x = element_text(angle = 45, hjust = 1),
+)
+
+grid.arrange(
+  ggplot(richness.table, aes(x = age, y = Observed)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "age", y = "Observed") +
+    scale_x_continuous(breaks = seq(50, 80, by = 10)) +  # Adjust range as needed
+    common_theme,
+  
+  ggplot(richness.table, aes(x = age, y = Chao1)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "age", y = "Chao1") +
+    scale_x_continuous(breaks = seq(50, 80, by = 10)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = age, y = ACE)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "age", y = "ACE") +
+    scale_x_continuous(breaks = seq(50, 80, by = 10)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = age, y = Shannon)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "age", y = "Shannon") +
+    scale_x_continuous(breaks = seq(50, 80, by = 10)) +
+    common_theme,
+  
+  ggplot(richness.table, aes(x = age, y = InvSimpson)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "darkred") +
+    labs(x = "age", y = "InvSimpson") +
+    scale_x_continuous(breaks = seq(50, 80, by = 10)) +
+    common_theme,
+  
+  nrow = 1
+)
+```
+
+## Observed Richness Spearman rank sum test (age)
+```{r, warning=FALSE}
+cor.test(richness.table$Observed,
+         sample_data(physeqfinal.2)$age_at_stool_collection, method = "spearman")
+```
+## CHAO1 Richness Spearman rank sum test (age)
+```{r, warning=FALSE}
+cor.test(richness.table$Chao1,
+         sample_data(physeqfinal.2)$age_at_stool_collection, method = "spearman")
+```
+## ACE Richness Spearman rank sum test (age)
+```{r, warning=FALSE}
+cor.test(richness.table$ACE,
+         sample_data(physeqfinal.2)$age_at_stool_collection, method = "spearman")
+```
+## InvSimpson Richness Spearman rank sum test (age)
+```{r, warning=FALSE}
+cor.test(richness.table$InvSimpson,
+         sample_data(physeqfinal.2)$age_at_stool_collection, method = "spearman")
+```
+## Shannon Richness Spearman rank sum test (age)
+```{r, warning=FALSE}
+cor.test(richness.table$Shannon,
+         sample_data(physeqfinal.2)$age_at_stool_collection, method = "spearman")
+```
+
+# Distance-based multivariate analysis / beta diversity
+## CLR transformation followed by Euclidian Distance (a.k.a. Aitchinson Distance)
+```{r, warning=FALSE}
+physeqfinal.2.clr <- microbiome::transform(physeqfinal.2, transform = "clr", target = "OTU",
+                                          shift = 0, scale = 1)
+physeqfinal.2.clr.eucl_dist <- vegdist(t(as.data.frame(as.matrix(otu_table(physeqfinal.2.clr)))),
+                                      method = "euclidean", binary = FALSE)
+
+sample_data(physeqfinal.2.clr)$Group <- factor(sample_data(physeqfinal.2.clr)$Group,
+                                              levels=c("C" , "P"),
+                                              ordered = FALSE)
+sample_data(physeqfinal.2.clr)$gender <- factor(sample_data(physeqfinal.2.clr)$gender,
+                                              levels=c("F" , "M"),
+                                              ordered = FALSE)
+```
+## Run the statistics for group variable
+```{r, warning=FALSE}
+set.seed(1337)
+adonis.Res.clr <- adonis2(physeqfinal.2.clr.eucl_dist ~ 
+                          sample_data(physeqfinal.2.clr)$Group,
+                          by = "margin",
+                          perm = 10000,
+                          na.action = na.exclude,
+                          parallel = 10)
+
+adonis.Res.clr
+```
+
+## Principal Coordinates Analysis (PCoA) for Group
+```{r, warning=FALSE}
+ord_clr <- ordinate(physeqfinal.2.clr, method = "PCoA",
+                    distance = "euclidean", binary = FALSE, autotransform = FALSE,
+                    trymax = 1000, maxit = 10000, sratmax = 0.999999,
+                    previous.best, parallel = 10)
+
+plot_ordination(physeqfinal.2.clr, ord_clr,
+                type = "Samples", color = "Group") + geom_point(size = 3) +
+  stat_ellipse(level = 0.95)
+```
+
+## Run the statistics for gender variable
+```{r, warning=FALSE}
+set.seed(1337)
+adonis.Res.clr <- adonis2(physeqfinal.2.clr.eucl_dist ~ 
+                          sample_data(physeqfinal.2.clr)$gender,
+                          by = "margin",
+                          perm = 10000,
+                          na.action = na.exclude,
+                          parallel = 10)
+adonis.Res.clr
+```
+
+## Principal Coordinates Analysis (PCoA) for Gender
+```{r, warning=FALSE}
+ord_clr <- ordinate(physeqfinal.2.clr, method = "PCoA",
+                    distance = "euclidean", binary = FALSE, autotransform = FALSE,
+                    trymax = 1000, maxit = 10000, sratmax = 0.999999,
+                    previous.best, parallel = 10)
+plot_ordination(physeqfinal.2.clr, ord_clr,
+                type = "Samples", color = "gender") + geom_point(size = 3) +
+  stat_ellipse(level = 0.95)
+```
+
+## Run the statistics for BMI variable
+```{r, warning=FALSE}
+set.seed(1337)
+adonis.Res.clr <- adonis2(physeqfinal.2.clr.eucl_dist ~ 
+                          sample_data(physeqfinal.2.clr)$BMI,
+                          by = "margin",
+                          perm = 10000,
+                          na.action = na.exclude,
+                          parallel = 10)
+
+adonis.Res.clr
+```
+
+## Principal Coordinates Analysis (PCoA) for BMI
+```{r, warning=FALSE}
+ord_clr <- ordinate(physeqfinal.2.clr, method = "PCoA",
+                    distance = "euclidean", binary = FALSE, autotransform = FALSE,
+                    trymax = 1000, maxit = 10000, sratmax = 0.999999,
+                    previous.best, parallel = 10)
+plot_ordination(physeqfinal.2.clr, ord_clr,
+                type = "Samples", color = "BMI") + geom_point(size = 3) +
+  stat_ellipse(level = 0.95)
+```
+
+## Run the statistics for Age variable
+```{r, warning=FALSE}
+set.seed(1337)
+adonis.Res.clr <- adonis2(physeqfinal.2.clr.eucl_dist ~ 
+                          sample_data(physeqfinal.2.clr)$age_at_stool_collection,
+                          by = "margin",
+                          perm = 10000,
+                          na.action = na.exclude,
+                          parallel = 10)
+
+adonis.Res.clr
+```
+
+## Principal Coordinates Analysis (PCoA) for Age
+```{r, warning=FALSE}
+ord_clr <- ordinate(physeqfinal.2.clr, method = "PCoA",
+                    distance = "euclidean", binary = FALSE, autotransform = FALSE,
+                    trymax = 1000, maxit = 10000, sratmax = 0.999999,
+                    previous.best, parallel = 10)
+plot_ordination(physeqfinal.2.clr, ord_clr,
+                type = "Samples", color = "age_at_stool_collection") + geom_point(size = 3) +
+  stat_ellipse(level = 0.95)
+```
+
+# Session Info for reproducibility
+```{r, warning=FALSE}
+sessionInfo()
+```
