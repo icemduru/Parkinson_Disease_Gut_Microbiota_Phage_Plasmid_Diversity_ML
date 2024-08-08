@@ -12,3 +12,16 @@ Parkinson_Disease_Gut_Microbiota_Phage_Plasmid_Diversity_ML/
 |   └── plasmid_genes.pdf  # Plasmid genes occurrence frequency diversity analysis
 │
 └── README.md               # This file
+```
+
+
+```markdown
+### Citing This Work
+If you use this code, please cite our paper:
+
+[Pre-print](https://www.biorxiv.org/content/10.1101/2023.10.23.563061v1)
+Submitted to Scientific Reports. The DOI will be added upon acceptance of the manuscript.
+```
+
+### Contact
+For questions, please contact Ilhan Cem Duru at ilhan.duru@helsinki.fi
