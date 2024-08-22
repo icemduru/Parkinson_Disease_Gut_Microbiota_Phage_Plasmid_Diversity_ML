@@ -16,6 +16,10 @@ This section outlines the organization of folders within this repository
 * **Data_Visualizations**
     * Python scripts to visualize our data 
 
+* **Differential Abundance Analysis (Deseq2)**
+    * R Script (Rmarkdown and knitted pdf format) for differential abundance analysis
+
+
 
 ## Citing This Work
 If you use this code, please cite our paper:

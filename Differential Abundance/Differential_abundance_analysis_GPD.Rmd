@@ -1,0 +1,110 @@
+---
+title: "Phage Differential Abundance Using GPD count data"
+author: "Ilhan Cem Duru"
+date: "2024-08-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load necessary libraries
+```{r, message=FALSE, warning=FALSE,invisible=TRUE}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(apeglm)
+```
+
+## Import count and metadata and create DESeqDataSet object
+```{r,warning=FALSE,message=FALSE}
+countdata <- read.table("features_reads_raw_count.tsv", header=TRUE, row.names=1)
+head(countdata)
+metadata <- read.table("pd_meta_with_ffq_and_scfa_only_oursamples_3variables.csv",
+                       header=TRUE, row.names=1,sep=",")
+head(metadata)
+
+# include relevant covariates in the design
+#formula to account for potential confounding factors
+dds <- DESeqDataSetFromMatrix(countData = countdata,
+                              colData = metadata,
+                              design = ~ gender + age_at_stool_collection + Group)
+
+dds
+
+#filter out low count phages (total count < 30, 136 samples in total
+#so 30/136=0.22 per sample) and minimum number of samples with at least 1 count.
+#At least 15 samples should have at least 1 count. By this way we can be
+#efficient in terms of computational time, because if only couple of samples
+#have counts, it is not possible to make any statistical inference.
+keep <- rowSums(counts(dds)) >= 30 & rowSums(counts(dds) >= 1) >= 15
+dds <- dds[keep,]
+dds
+```
+
+## Run DESeq2
+```{r,warning=FALSE,message=FALSE}
+dds <- DESeq(dds)
+#resultsNames(dds)
+# Apply shrinkage to log fold changes using apeglm method
+resLFC <- lfcShrink(dds, coef="Group_P_vs_C", type="apeglm")
+
+# Filter out low fold2 changes and high p-values
+res_clean <- resLFC[!is.na(resLFC$log2FoldChange) & !is.na(resLFC$padj), ]
+res_filtered <- res_clean[abs(res_clean$log2FoldChange) > 0.25 & res_clean$padj < 0.05, ]
+
+
+# Order results by adjusted p-value
+resOrdered <- res_filtered[order(res_filtered$padj),]
+head(resOrdered)
+
+# Summarize results
+summary(res_filtered, alpha=0.05)
+
+#plot one of the phages with higher abundance in Control group (minus log2fold)
+plotCounts(dds, gene="uvig_564019", intgroup="Group")
+
+#plot one of the phages with higher abundance in Patient group (plus log2fold)
+plotCounts(dds, gene="uvig_127743", intgroup="Group")
+
+```
+# plot PCA
+```{r,warning=FALSE,message=FALSE}
+# 1. Perform variance stabilizing transformation
+vsd <- vst(dds, blind=FALSE)
+
+# 2. Calculate PCA
+pcaData <- plotPCA(vsd, intgroup=c("Group"), returnData=TRUE)
+
+# 3. Calculate the percentage of variance explained by each principal component
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+# 4. Create the PCA plot
+ggplot(pcaData, aes(x = PC1, y = PC2, color = Group, shape = Group)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  ggtitle("PCA of Phage Abundance Data") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# 5. Save the plot
+ggsave("PCA_plot.png", width = 8, height = 6)
+```
+
+# Export significant results
+```{r,warning=FALSE, message=FALSE}
+sigResults <- subset(resLFC, padj < 0.05)
+write.csv(as.data.frame(sigResults), file = "significant_phages_shrinkage.csv")
+# also export normalized counts
+normalized_counts <- counts(dds, normalized=TRUE)
+write.csv(as.data.frame(normalized_counts), file = "normalized_counts.csv")
+# export all results
+write.csv(as.data.frame(resLFC), file = "all_phages_shrinkage.csv")
+```
+
+# Session Info for reproducibility
+```{r}
+sessionInfo()
+```
