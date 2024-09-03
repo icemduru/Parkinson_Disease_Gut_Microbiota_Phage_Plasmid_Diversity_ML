@@ -383,10 +383,13 @@ cor.test(richness.table$Shannon,
 ```
 
 # Distance-based multivariate analysis / beta diversity
-## CLR transformation followed by Jaccard distance calculation (Binary Data)
+## Jaccard distance calculation (Binary Data)
 ```{r, warning=FALSE}
-physeqfinal.2.clr <- microbiome::transform(physeqfinal.2, transform = "clr", target = "OTU",
-                                          shift = 0, scale = 1)
+#physeqfinal.2.clr <- microbiome::transform(physeqfinal.2, transform = "clr", target = "OTU",
+#                                          shift = 0, scale = 1)
+
+#do not apply clr transformation to binary data
+physeqfinal.2.clr <- physeqfinal.2
 physeqfinal.2.clr.jaccard_dist <- vegdist(t(as.data.frame(as.matrix(otu_table(physeqfinal.2.clr)))),
                                       method = "jaccard", binary = TRUE)
 
