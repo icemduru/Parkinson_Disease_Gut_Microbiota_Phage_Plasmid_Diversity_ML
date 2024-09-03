@@ -152,6 +152,30 @@ grid.arrange(
   nrow = 1)
 ```
 
+## Calculate mean and standard deviation for each alpha diversity metric
+```{r, warning=FALSE}
+richness_stats <- richness.table %>%
+  group_by(Group) %>%
+  summarise(
+    Observed_Mean = mean(Observed),
+    Observed_SD = sd(Observed),
+    Chao1_Mean = mean(Chao1),
+    Chao1_SD = sd(Chao1),
+    ACE_Mean = mean(ACE),
+    ACE_SD = sd(ACE),
+    Shannon_Mean = mean(Shannon),
+    Shannon_SD = sd(Shannon),
+    InvSimpson_Mean = mean(InvSimpson),
+    InvSimpson_SD = sd(InvSimpson)
+  )
+
+# Print the results
+print(richness_stats)
+
+#results to a CSV file
+write.csv(richness_stats, "group_richness_statistics.csv", row.names = FALSE)
+```
+
 ## Observed Richness Wilcoxon rank sum test (Group)
 ```{r, warning=FALSE}
 wilcox.test(richness.table$Observed ~ sample_data(physeqfinal.2)$Group,
@@ -205,6 +229,30 @@ grid.arrange(
     geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
     stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
   nrow = 1)
+```
+
+## Calculate mean and standard deviation for each alpha diversity metric
+```{r, warning=FALSE}
+richness_stats <- richness.table %>%
+  group_by(gender) %>%
+  summarise(
+    Observed_Mean = mean(Observed),
+    Observed_SD = sd(Observed),
+    Chao1_Mean = mean(Chao1),
+    Chao1_SD = sd(Chao1),
+    ACE_Mean = mean(ACE),
+    ACE_SD = sd(ACE),
+    Shannon_Mean = mean(Shannon),
+    Shannon_SD = sd(Shannon),
+    InvSimpson_Mean = mean(InvSimpson),
+    InvSimpson_SD = sd(InvSimpson)
+  )
+
+# Print the results
+print(richness_stats)
+
+#results to a CSV file
+write.csv(richness_stats, "gender_richness_statistics.csv", row.names = FALSE)
 ```
 
 ## Observed Richness Wilcoxon rank sum test (gender)

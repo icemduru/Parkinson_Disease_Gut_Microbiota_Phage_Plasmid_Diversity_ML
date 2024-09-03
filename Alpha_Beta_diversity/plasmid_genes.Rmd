@@ -153,6 +153,35 @@ grid.arrange(
   nrow = 1)
 ```
 
+## Calculate mean and standard deviation for each alpha diversity metric
+```{r, warning=FALSE}
+# Function to calculate mean and SD, ignoring NaN values
+calc_mean_sd <- function(x) {
+  x_clean <- x[!is.nan(x)]
+  if (length(x_clean) > 0) {
+    c(mean = mean(x_clean, na.rm = TRUE), 
+      sd = sd(x_clean, na.rm = TRUE))
+  } else {
+    c(mean = NA, sd = NA)
+  }
+}
+
+# Calculate mean and standard deviation for each index by group, ignoring NaN values
+richness_stats <- richness.table %>%
+  group_by(Group) %>%
+  summarise(
+    across(c(Observed, Chao1, ACE, Shannon, InvSimpson),
+           list(Mean = ~calc_mean_sd(.)[1],
+                SD = ~calc_mean_sd(.)[2]))
+  )
+
+# Print the results
+print(richness_stats)
+
+# write the results to a CSV file
+write.csv(richness_stats, "group_richness_statistics.csv", row.names = FALSE)
+```
+
 ## Observed Richness Wilcoxon rank sum test (Group)
 ```{r, warning=FALSE}
 wilcox.test(richness.table$Observed ~ sample_data(physeqfinal.2)$Group,
@@ -206,6 +235,35 @@ grid.arrange(
     geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.2, alpha =.5) +
     stat_summary(fun = mean, color = "darkred", geom = "point", shape = 18, size = 4),
   nrow = 1)
+```
+
+## Calculate mean and standard deviation for each alpha diversity metric
+```{r, warning=FALSE}
+# Function to calculate mean and SD, ignoring NaN values
+calc_mean_sd <- function(x) {
+  x_clean <- x[!is.nan(x)]
+  if (length(x_clean) > 0) {
+    c(mean = mean(x_clean, na.rm = TRUE), 
+      sd = sd(x_clean, na.rm = TRUE))
+  } else {
+    c(mean = NA, sd = NA)
+  }
+}
+
+# Calculate mean and standard deviation for each index by group, ignoring NaN values
+richness_stats <- richness.table %>%
+  group_by(gender) %>%
+  summarise(
+    across(c(Observed, Chao1, ACE, Shannon, InvSimpson),
+           list(Mean = ~calc_mean_sd(.)[1],
+                SD = ~calc_mean_sd(.)[2]))
+  )
+
+# Print the results
+print(richness_stats)
+
+# write the results to a CSV file
+write.csv(richness_stats, "gender_richness_statistics.csv", row.names = FALSE)
 ```
 
 ## Observed Richness Wilcoxon rank sum test (gender)
