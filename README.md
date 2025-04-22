@@ -24,9 +24,9 @@ This section outlines the organization of folders within this repository
 ## Citing This Work
 If you use this code, please cite our paper:
 
-[Pre-print version link](https://www.biorxiv.org/content/10.1101/2023.10.23.563061v1)
+[Published paper link](https://www.nature.com/articles/s41598-025-96924-5)
 
-Submitted to Scientific Reports. The DOI will be added upon acceptance of the manuscript.
+Published in Scientific Reports. DOI: https://doi.org/10.1038/s41598-025-96924-5
 
 
 ### Contact
